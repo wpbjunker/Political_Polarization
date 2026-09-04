@@ -76,10 +76,12 @@ CREATE OR REPLACE TABLE voter_identity_scores AS
         // voter classification
         /*
         Add three new categorical columns:
-            media_preference: classifies voter media engagement, emphasis on traditional media and new, decentralized, internet-based media like podcasts and                                    social apps
+            media_preference: classifies voter media engagement, emphasis on traditional media and new, decentralized, internet-based media like podcasts and social apps
             political_affiliation: classifies voter affiliation with the Democratic and Republican parties
-            view_of_opposition: classifies voter polarization to indicate whether they support inter-party debate and compromise, or they view the opposing party                                  as so extreme, and their respective ideals so different, that any attempt at collaboration is counter-productive, or even dangerous
+            view_of_opposition: classifies voter polarization to indicate whether they support inter-party debate and compromise, or they view the opposing party as so extreme, and their respective ideals so different, that any attempt at collaboration is counter-productive, or even dangerous
+        */
 
+        /*
            New Media  No New Media
           +----------+-------------+
        TV |   Both   |   Legacy    |
@@ -93,7 +95,8 @@ CREATE OR REPLACE TABLE voter_identity_scores AS
             WHEN media_tv_none < 50 AND (media_podcast > 50 OR media_social_media > 50) THEN 'both_media' // Diverse media usage
     		ELSE 'no_media'
     	END AS media_preference,
-         /*
+         
+        /*
                     For GOP     Not GOP
                 +-------------+-------------+
         For Dem |     Both    | Dem-aligned |
@@ -107,8 +110,8 @@ CREATE OR REPLACE TABLE voter_identity_scores AS
             WHEN team_gop > 50 AND team_dem > 50 THEN 'both_parties' // As of now, no voters fall in this category
             ELSE 'unaffiliated' // Aligned with neither Dems nor GOP, likely apolitical
         END AS political_affiliation,
-        /*
         
+        /*
                         Safe     Dangerous
                     +-----------+---------+
         Misinformed | Misguided | Foolish |
