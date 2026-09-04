@@ -1,33 +1,10 @@
+/* ///////////////////////////// */
+/* /// CONTEXT CONFIGURATION /// */
+/* ///////////////////////////// */
 
-
-// Set Context
 USE ROLE TRAINING_ROLE;
 USE WAREHOUSE CAMEL_WH;
 USE DATABASE CAMEL_DB;
-
-///// DELETE, ONLY FOR EXPLORATION /////
-SELECT 
-    HS_VIEW_OF_OPPOSITION_DANGEROUS,
-    HS_VIEW_OF_OPPOSITION_MISINFORMED,
-    HS_VIEW_OF_OPPOSITION_JUST_DISAGREE
-FROM L2HAYSTAQDNA_VOTERSPREDICTIVEANALYTICS_MODELS.VOTERS_HAYSTAQDNA.HAYSTAQDNASCORES;
-
-/*
-Worksheet #1. Build a curation layer. (20 pts)
-• Create a specific schema for this layer. Using SQL within a worksheet: Create tables and
-views using a naming convention that makes it clear. (SLV_ or CUR_ )
-• Tag your tables using the Semantic policy option. Give the tag = project for all new tables
-and views.
-• Within your SQL: You are to enhance the data with additional fields based on logic you
-create (e.g. case statements or IFF). Add flags or Yes/No indicators. You can remove data
-if it's missing values or update null values based on logic you decide. Be creative. At least
-5 steps are needed within the procedure to “curate” the data. By “steps” we mean
-changes to the original data.
-• Each step within your curation process needs to be reproducible when the script is run by
-the instructor. This means all objects you create must have the "Create or Replace" syntax.
-This means that within your script for curation, you are creating tables and/or views to hold
-the results.
-*/
 
 CREATE TAG IF NOT EXISTS work_type;
 
@@ -36,8 +13,13 @@ USE SCHEMA VOTERS_CUR;
 
 
 
+/* ///////////////////////////// */
+/* /////// DATA CLEANING /////// */
+/* ///////////////////////////// */
+
 /* 
-At 304 columns, our source table has way too many attributes. About half of these are simply mirror attributes whose values are approximately the inverse of of their mirror (e.g. HS_DEI_SUPPORT and HS_DEI_OPPOSE). It's much more straightforward to just pick and represent full alignment as 100, complete opposition as 1. Column labels have been renamed to communicate this. The're also less verbose now, which should improve legibility.
+At 304 columns, our source table has way too many attributes. About half of these are simply mirror attributes whose values are approximately the inverse of of their mirror (e.g. HS_DEI_SUPPORT and HS_DEI_OPPOSE). 
+It's much more straightforward to just pick and represent full alignment as 100, complete opposition as 1. Column labels have been renamed to communicate this. The're also less verbose now, which should improve legibility.
 */
 CREATE OR REPLACE TABLE voter_identity_scores AS
     SELECT 
@@ -144,43 +126,20 @@ CREATE OR REPLACE TABLE voter_identity_scores AS
     
     ALTER TABLE voter_identity_scores SET TAG work_type = 'project';
 
-
-
 /*
-We're not interested in apolitical voters, so we'll delete rows where poliitcal_affiliation = 'unaffiliated'. Additionally, cases where a voter displays an score aligning them with *both* the Democratic Party and the Republican Party are likely a fluke, and should be thrown out.
+We're not interested in apolitical voters, so we'll delete rows where poliitcal_affiliation = 'unaffiliated'. 
+Additionally, cases where a voter displays an score aligning them with *both* the Democratic Party and the Republican Party are likely a fluke, and should be thrown out.
 */
 DELETE FROM voter_identity_scores
 WHERE political_affiliation = 'unaffiliated'
     OR political_affiliation = 'both_parties';
 
-
-
 /*
-To recap the changes:
-    1. Selected a subset of the original columns
-    2. Aliased columns with standardized, less verbose labels
-    3. Added calculated column 'media_preference'
-    4. Added calculated column 'political_affiliation'
-    5. Added calculated column 'view_of_opposition'
-    6. Deleted rows that could obstruct analysis
-*/
-
-
-
-
-
-/*
-Worksheet #2. Create stored procedure (10)
-• Create a stored procedure that performs at least 2 more data transformations. These must
-be different from the changes you’re making in worksheet #1.
-Be sure to use “create or replace” for this procedure.
-*/
-
-/*
+It will be useful to compare policy preference with party affinity in order to track the relationship between party platform and voter behavior.
 This procedure creates, as needed, columns party_platform_alignment and party_orthodoxy, then dynamically calculates their values from existing data.
 */
 CREATE OR REPLACE PROCEDURE gen_orthodoxy_proc(
-    // party_platform_aligment is somewhat arbitrary; this allows the user to select the dividing score between Left and Right
+    /* party_platform_aligment is somewhat arbitrary; this allows the user to select the dividing score between Left and Right */
     DIVIDING_SCORE INT DEFAULT 0
 )
 RETURNS VARCHAR
@@ -246,28 +205,31 @@ $$;
 
 CALL gen_orthodoxy_proc(-5);
 
-
-
-
-
 /*
-Worksheet #3. Build an aggregation layer. Put these objects in a different schema using a
-naming convention that distinguishes it from curation. Such as (GLD_ or AGG_ ) (20 pts)
-• Step 1. Create a second SQL worksheet: At least 4 different tables or views must be
-created, and 4 different types of aggregation should be used. (Avg, sum, count, min, max
-etc.)
-• Step 2. Create a materialized view that queries some of the data in step 1.
-NOTE: Get creative with your data. Act as though you are trying to provide your colleagues
-with multiple ways to look at your data. How would others want to view that data and what
-questions would be interesting to them. Remember to use “create or replace” so that the
-instructor can recreate your objects.
+To recap the changes:
+    1. Selected a subset of the original columns
+    2. Aliased columns with standardized, less verbose labels
+    3. Added calculated column 'media_preference'
+    4. Added calculated column 'political_affiliation'
+    5. Added calculated column 'view_of_opposition'
+    6. Deleted rows that could obstruct analysis
+    7. Scripted procedure to assign each row a 'party_orthodoxy' value
 */
 
-CREATE SCHEMA IF NOT EXISTS VOTERS_AGG; // For analytics
+
+
+/* ///////////////////////////// */
+/* ////// DATA EXPLORATION ///// */
+/* ///////////////////////////// */
+
+
+CREATE SCHEMA IF NOT EXISTS VOTERS_AGG;
 USE SCHEMA VOTERS_AGG;
 
 /* 
-Universal Healthcare is among the most prominent policies generally identified as 'socialist' or 'far-left'. It's has had strong salience in the Democratic Party, though no presidential candidate has incorporated it into their platform in the general election. This aggregation displays how support for UHC varies accross party affiliations and preferred media sources.
+Universal Healthcare is among the most prominent policies generally identified as 'socialist' or 'far-left'. 
+It's has had strong salience in the Democratic Party, though no presidential candidate has incorporated it into their platform in the general election. 
+This aggregation displays how support for UHC varies accross party affiliations and preferred media sources.
 */
 CREATE OR REPLACE TABLE max_universal_healthcare_support_by_party_media AS
     SELECT political_affiliation, media_preference, MAX(universal_healthcare_support) AS max_uhc_support
@@ -367,134 +329,5 @@ CREATE OR REPLACE TABLE media_polarization AS
     ORDER BY den.media_preference, proportion_of_media_total DESC;
 
 ALTER TABLE media_polarization SET TAG work_type = 'project';
-
-
-
-
-
-/*
-Worksheet #4. Create a function (10 pts)
-• Create a table function to generate results from one of your aggregated tables or views. Be
-sure to use the “Create or Replace” clause.
-• The output of the function should be in the form of a table.
-*/
-
-CREATE OR REPLACE FUNCTION getSubset(
-   cat_condition VARCHAR 
-)
-RETURNS TABLE (
-    political_affiliation VARCHAR,
-    media_preference VARCHAR,
-    view_of_opposition VARCHAR,
-    count_voters INT
-)
-AS 'SELECT *
-    FROM count_by_party_media_viewopp
-    WHERE political_affiliation = cat_condition
-        OR media_preference = cat_condition
-        OR view_of_opposition = cat_condition';
-
-
-
-
-
-/*
-Worksheet #5. Data Sharing (5 pts)
-• Create an internal marketplace listing for your materialized view in worksheet #3
-*/
-
-/*
-When I follow the Snowsight instructions as provided in the organizational listing documentation (https://docs.snowflake.com/en/user-guide/collaboration/listings/organizational/org-listing-create) I receive the following message: "None of your roles have the privilege to create a listing. Ask the account administrator for the following privilege: 'CREATE ORGANIZATION LISTING' "
-
-Not sure what to do from here.
-*/
-
-
-
-
-
-/*
-Worksheet #6 Task (10 pts)
-• Create a task that runs every Sunday at 4 am. (Test it but then be sure to suspend it)
-• This task should execute the stored procedure you created in worksheet #2
-Introduction to tasks | Snowflake Documentation
-*/
-
-CREATE OR REPLACE TASK task_call_gen_orthodoxy_proc
-    WAREHOUSE = CAMEL_WH
-    SCHEDULE = 'USING CRON 0 4 * * 0 America/Chicago'
-AS 
-    CALL gen_orthodoxy_proc(-5);
-
-ALTER TASK task_call_gen_orthodoxy_proc RESUME;
-
-ALTER TASK task_call_gen_orthodoxy_proc SUSPEND;
-
-
-
-
-
-/*
-Worksheet #7. Create a summary with the following information: (10 pts)
-A. Provide the name and description of the data set you chose.
-B. Explain in 1-2 sentences what your naming convention is and what your schemas are so the
-instructor can locate them quickly.
-C. Briefly explain the logic/formulas used for any custom fields you create in your curation
-layer (This is a mini data catalog)
-*/
-
-/* 
-A:  
-Dataset Title: 
-L2HAYSTAQDNA_VOTERSPREDICTIVEANALYTICS_MODELS.HAYSTAQDNASCORES
-
-Dataset Description: 
-Catalogs the preferences of a sample of US voters on a 100-point scale to faciliate analysis and deliver insights into general population behavior and ideology across critical political and social issues.
-
-
-B:  
-SCHEMAS: VOTERS_CUR and VOTERS_AGG
-
-Naming Convention: 
-I've used snake case for almost all objects in this worksheet, including column labels, table names, schemas, tasks and procedures. I use camel case for functions.
-
-
-C:  
-Custom Fields:
-media_preference: classifies voter media engagement, emphasis on traditional media and new, decentralized, internet-based media like podcasts and social apps
-        
-political_affiliation: classifies voter affiliation with the Democratic and Republican parties 
-        
-view_of_opposition: classifies voter polarization to indicate whether they support inter-party debate and compromise, or they view the opposing party as so extreme, and their respective ideals so different, that any attempt at collaboration is counter-productive, or even dangerous
-        
-party_platform_alignment: an integer that indicates policy positions that align with the Democratic platform when positive, and the Republican platform when negative; the procedure used to assign this value accepts an argument that shifts the scale between Dem and GOP, I selected -5 as the US population generally skews conservative compared to similar countries
-
-party_orthodoxy: classifies whether voter policiy positions align with their party's platform
-
-
-
-
-
-/*
-Create a simple dashboard. (15 pts)
-• 4 tiles minimum. Be sure to label each tile with a business-friendly name and each axis in
-the charts should be understandable as well. In short – act as though a business team
-member is going to be looking at it. Share the dashboard with the instructor – use your
-animal's name as the prefix. Example “Cheetah_Project_Dashboa
-*/
-
-/* Dashboard Created */
-
-
-
-
-
-
-
-
-
-
-
-
 
 
